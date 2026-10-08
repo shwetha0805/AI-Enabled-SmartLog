@@ -23,7 +23,7 @@ The system combines real-time log collection, centralized log processing, machin
 - Search and severity filtering
 - Analytics and recent-event monitoring
 
-**System Architecture**
+**##System Architecture**
 
 Windows Event Logs
         ↓
@@ -44,7 +44,7 @@ Windows Event Logs
         ↓
  SmartLog Dashboard
  
-**Technology Stack**
+**##Technology Stack**
 
 **Backend**
 Java
@@ -75,7 +75,7 @@ Git
 GitHub
 Tailscale for development-time connectivity
 
-**AI Analysis**
+**##AI Analysis**
 
 SmartLog uses an Isolation Forest model to identify unusual event behavior.
 
@@ -88,7 +88,7 @@ CRITICAL
 
 For example, failed authentication events can be classified as high-risk events, while unauthorized activity can be classified as critical.
 
-**Failure Handling**
+**##Failure Handling**
 
 SmartLog is designed to avoid losing events when the AI service becomes unavailable.
 
@@ -102,7 +102,7 @@ Once the AI service becomes available, pending events are reprocessed.
 
 The application also monitors the availability of backend and infrastructure services.
 
-**Project Structure**
+**##Project Structure**
 SmartLog/
 ├── src/
 │   ├── main/
@@ -121,7 +121,7 @@ SmartLog/
 ├── pom.xml
 └── README.md
 
-**Configuration**
+**##Configuration**
 
 Sensitive configuration values are supplied through environment variables.
 
@@ -135,7 +135,7 @@ Refer to .env.example for the required configuration variables.
 
 Do not commit real passwords, API keys, or other credentials to the repository.
 
-**Running the Project**
+**##Running the Project**
 
 Spring Boot Backend
 
@@ -145,7 +145,7 @@ The backend runs on:
 
 http://localhost:8080
 
-**AI Service**
+**##AI Service**
 
 The Python AI service runs on:
 
@@ -159,10 +159,10 @@ The health endpoint is:
 
 GET /health
 
-**Dashboard** 
+**##Dashboard** 
 The SmartLog dashboard communicates with the Spring Boot REST API to display security events, analytics, alerts, and system status.
 
-**Security Event Example**
+**##Security Event Example**
 
 A failed Windows authentication event such as Windows Event ID 4625 can travel through the complete pipeline:
 
@@ -184,18 +184,18 @@ Dashboard
 
 The event can then appear as a HIGH-risk anomaly in the SmartLog application.
 
-**Project Team**
+**##Project Team**
 Member	Responsibility
 Member 1	Java, Spring Boot, MySQL, Backend Integration
 Member 2	Python, Machine Learning, AI Service
 Member 3	Winlogbeat, Logstash, Elasticsearch, Log Processing
 Member 4	Dashboard, Frontend, Integration and Testing
 
-**Project Goal**
+**##Project Goal**
 
 The goal of SmartLog is to reduce the difficulty of manually monitoring large volumes of security logs by combining automated log processing, machine-learning-based anomaly detection, risk classification, and centralized visualization.
 
-**Future Scope**
+**##Future Scope**
 Cloud deployment
 Advanced sequence-based anomaly detection
 Improved event correlation
@@ -205,6 +205,6 @@ Advanced incident detection
 Larger-scale performance evaluation
 Integration with additional log sources
 
-**Disclaimer**
+**##Disclaimer**
 
 SmartLog is an academic project developed for security log monitoring, anomaly detection, and visualization research.
