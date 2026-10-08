@@ -1,0 +1,43 @@
+### Create a security log
+POST http://localhost:8080/api/logs
+Content-Type: application/json
+
+{
+  "timestamp": "2026-08-17T20:00:00",
+  "username": "admin",
+  "eventType": "LOGIN_FAILED",
+  "sourceIp": "192.168.1.50",
+  "severity": "WARNING",
+  "message": "Failed login attempt"
+}
+
+### Get all logs
+GET http://localhost:8080/api/logs
+
+### Delete logs
+DELETE http://localhost:8080/api/logs/1
+
+### Update log
+PUT http://localhost:8080/api/logs/1
+Content-Type: application/json
+
+{
+  "timestamp": "2026-08-22T10:30:00",
+  "username": "admin",
+  "eventType": "LOGIN_SUCCESS",
+  "sourceIp": "192.168.1.50",
+  "severity": "INFO",
+  "message": "Successful login"
+}
+
+### Test validation
+POST http://localhost:8080/api/logs
+Content-Type: application/json
+
+{
+  "username": "",
+  "eventType": "",
+  "sourceIp": "",
+  "severity": "",
+  "message": ""
+}
