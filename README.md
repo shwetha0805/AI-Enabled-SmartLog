@@ -1,4 +1,4 @@
-# AI-Enabled SmartLog
+# AI-Enabled-SmartLog
 
 AI-Enabled SmartLog is a software-based security log monitoring and management system designed to collect, analyze, classify, and visualize security events from Windows systems.
 
@@ -23,8 +23,9 @@ The system combines real-time log collection, centralized log processing, machin
 - Search and severity filtering
 - Analytics and recent-event monitoring
 
-**##System Architecture**
+## System Architecture
 
+```text
 Windows Event Logs
         ↓
     Winlogbeat
@@ -43,66 +44,79 @@ Windows Event Logs
       MySQL
         ↓
  SmartLog Dashboard
- 
-**##Technology Stack**
+ ```
 
-**Backend**
-Java
-Spring Boot
-Spring Data JPA
-REST APIs
-MySQL
+## Technology Stack
 
-**AI / Machine Learning**
-Python
-Flask
-Scikit-learn
-Isolation Forest
+- Backend:
 
-**Log Processing**
-Winlogbeat
-Logstash
-Elasticsearch
+```
+- Java
+- Spring Boot
+- Spring Data JPA
+- REST APIs
+- MySQL
+```
 
-**Frontend**
+- AI / Machine Learning:
+
+```
+- Python
+- Flask
+- Scikit-learn
+- Isolation Forest
+```
+Log Processing:
+```
+- Winlogbeat
+- Logstash
+- Elasticsearch
+```
+Frontend:
+```
 HTML
 CSS
 JavaScript
+```
+Development:
+```
+- IntelliJ IDEA
+- Git
+- GitHub
+- Tailscale for development-time connectivity
 
-**Development**
-IntelliJ IDEA
-Git
-GitHub
-Tailscale for development-time connectivity
-
-**##AI Analysis**
+```
+## AI Analysis
 
 SmartLog uses an Isolation Forest model to identify unusual event behavior.
 
 The AI service also applies security rules to classify events into risk levels such as:
 
-LOW
-MEDIUM
-HIGH
-CRITICAL
+```
+- LOW
+- MEDIUM
+- HIGH
+- CRITICAL
+```
 
 For example, failed authentication events can be classified as high-risk events, while unauthorized activity can be classified as critical.
 
-**##Failure Handling**
+## Failure Handling
 
 SmartLog is designed to avoid losing events when the AI service becomes unavailable.
 
 If the AI service is unavailable:
 
-The event is retained by the backend.
-Fallback analysis is performed.
-The event is stored with a fallback status.
-The system periodically retries AI processing.
-Once the AI service becomes available, pending events are reprocessed.
+- The event is retained by the backend.
+- Fallback analysis is performed.
+- The event is stored with a fallback status.
+- The system periodically retries AI processing.
+- Once the AI service becomes available, pending events are reprocessed.
 
 The application also monitors the availability of backend and infrastructure services.
 
-**##Project Structure**
+Project Structure
+```
 SmartLog/
 ├── src/
 │   ├── main/
@@ -120,8 +134,9 @@ SmartLog/
 ├── .gitignore
 ├── pom.xml
 └── README.md
+```
 
-**##Configuration**
+## Configuration
 
 Sensitive configuration values are supplied through environment variables.
 
@@ -135,9 +150,8 @@ Refer to .env.example for the required configuration variables.
 
 Do not commit real passwords, API keys, or other credentials to the repository.
 
-**##Running the Project**
-
-Spring Boot Backend
+## Running the Project
+- Spring Boot Backend
 
 Configure the required environment variables and run the Spring Boot application.
 
@@ -145,7 +159,7 @@ The backend runs on:
 
 http://localhost:8080
 
-**##AI Service**
+-  AI Service
 
 The Python AI service runs on:
 
@@ -159,13 +173,15 @@ The health endpoint is:
 
 GET /health
 
-**##Dashboard** 
+## Dashboard
+
 The SmartLog dashboard communicates with the Spring Boot REST API to display security events, analytics, alerts, and system status.
 
-**##Security Event Example**
+## Security Event Example
 
 A failed Windows authentication event such as Windows Event ID 4625 can travel through the complete pipeline:
 
+```
 Windows Event 4625
       ↓
 Winlogbeat
@@ -181,30 +197,30 @@ Spring Boot
 MySQL
       ↓
 Dashboard
+```
 
 The event can then appear as a HIGH-risk anomaly in the SmartLog application.
 
-**##Project Team**
-Member	Responsibility
-Member 1	Java, Spring Boot, MySQL, Backend Integration
-Member 2	Python, Machine Learning, AI Service
-Member 3	Winlogbeat, Logstash, Elasticsearch, Log Processing
-Member 4	Dashboard, Frontend, Integration and Testing
+## Project Team
+- Member :	Responsibility
+- Member 1 : 	Java, Spring Boot, MySQL, Backend Integration
+- Member 2 :	Python, Machine Learning, AI Service
+- Member 3 :	Winlogbeat, Logstash, Elasticsearch, Log Processing
+- Member 4 :	Dashboard, Frontend, Integration and Testing
 
-**##Project Goal**
+## Project Goal
 
 The goal of SmartLog is to reduce the difficulty of manually monitoring large volumes of security logs by combining automated log processing, machine-learning-based anomaly detection, risk classification, and centralized visualization.
 
-**##Future Scope**
-Cloud deployment
-Advanced sequence-based anomaly detection
-Improved event correlation
-Role-based access control
-Audit logging
-Advanced incident detection
-Larger-scale performance evaluation
-Integration with additional log sources
-
-**##Disclaimer**
+## Future Scope
+- Cloud deployment
+- Advanced sequence-based anomaly detection
+- Improved event correlation
+- Role-based access control
+- Audit logging
+- Advanced incident detection
+- Larger-scale performance evaluation
+- Integration with additional log sources
+## Disclaimer
 
 SmartLog is an academic project developed for security log monitoring, anomaly detection, and visualization research.
