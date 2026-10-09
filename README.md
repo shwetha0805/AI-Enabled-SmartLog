@@ -88,36 +88,37 @@ Development:
 ```
 ## AI Analysis
 
-SmartLog uses an Isolation Forest model to identify unusual event behavior.
+SmartLog uses a machine-learning model based on Isolation Forest to identify potentially unusual events. The AI service also applies security rules to help classify events according to their risk levels.
 
 The AI service also applies security rules to classify events into risk levels such as:
 
 ```
-- LOW
-- MEDIUM
-- HIGH
-- CRITICAL
+- LOW - Events classified as low risk.
+- MEDIUM - Events requiring additional attention.
+- HIGH - Events that may indicate suspicious activity.
+- CRITICAL - Events requiring urgent investigation.
 ```
 
-For example, failed authentication events can be classified as high-risk events, while unauthorized activity can be classified as critical.
-
+The final classification depends on the model output and the security rules implemented in the application. These classifications are intended to support investigation and should not be treated as proof of a security incident.
 ## Failure Handling
 
-SmartLog is designed to avoid losing events when the AI service becomes unavailable.
+SmartLog uses configuration values to connect its backend, AI service, and supporting infrastructure.
 
-If the AI service is unavailable:
+Example environment-variable names:
 
-- The event is retained by the backend.
-- Fallback analysis is performed.
-- The event is stored with a fallback status.
-- The system periodically retries AI processing.
-- Once the AI service becomes available, pending events are reprocessed.
+- DB_PASSWORD=your_mysql_password
+- SMARTLOG_ES_PASSWORD=your_elasticsearch_password
+- SMARTLOG_AI_URL=http://127.0.0.1:5000/analyze
 
-The application also monitors the availability of backend and infrastructure services.
+These values are illustrative placeholders. Set the actual values in your local environment according to the application's configuration.
 
-Project Structure
+Refer to .env.example for the variables documented by the project. Environment variables must be configured in the process or development environment that launches the relevant service; creating a .env file alone does not guarantee that every service will load it.
+
+Never commit real passwords, API keys, tokens, or other credentials to the repository.
+## Project Structure
+
 ```
-SmartLog/
+AI-Enabled-SmartLog/
 ├── src/
 │   ├── main/
 │   │   ├── java/
@@ -130,11 +131,16 @@ SmartLog/
 │   │   └── resources/
 │   │       └── application.properties
 │   └── test/
+├── ai-service/
+├── frontend/
+├── log-pipeline/
 ├── .env.example
 ├── .gitignore
 ├── pom.xml
 └── README.md
 ```
+
+The Java application contains the backend APIs and database integration. The other directories contain the AI service, dashboard files, and log-pipeline configuration files.
 
 ## Configuration
 
@@ -151,27 +157,45 @@ Refer to .env.example for the required configuration variables.
 Do not commit real passwords, API keys, or other credentials to the repository.
 
 ## Running the Project
-- Spring Boot Backend
 
-Configure the required environment variables and run the Spring Boot application.
 
-The backend runs on:
+### Spring Boot Backend
 
-http://localhost:8080
+1. Configure the MySQL connection and required environment variables.
+2. Ensure that the MySQL server is running and the `smartlog` database is available.
+3. Start the Spring Boot application using the project's configured development environment.
 
--  AI Service
+The backend is configured to use:
 
-The Python AI service runs on:
+`http://localhost:8080`
 
-http://127.0.0.1:5000
+### AI Service
 
-The analysis endpoint is:
+1. Install the Python dependencies required by the AI service.
+2. Configure the required environment variables.
+3. Start the Python service using its implemented startup procedure.
 
-POST /analyze
+The AI service is expected to use:
 
-The health endpoint is:
+`http://127.0.0.1:5000`
 
-GET /health
+Available endpoints documented by the project:
+
+* `POST /analyze` — Analyze a log event.
+* `GET /health` — Check AI service health.
+
+### Log Pipeline
+
+Configure Elasticsearch, Logstash, and Winlogbeat using the files and settings provided in `log-pipeline/`. Verify that each service is running and that the configured addresses and ports are reachable.
+
+### Frontend Dashboard
+
+Open the frontend using the appropriate local development method and verify that its configured API URL points to the running Spring Boot backend.
+
+### Integration Check
+
+After starting the required services, submit a test event and verify the complete flow: ingestion, processing, AI analysis or fallback classification, database storage, and dashboard display.
+
 
 ## Dashboard
 
@@ -213,14 +237,18 @@ The event can then appear as a HIGH-risk anomaly in the SmartLog application.
 The goal of SmartLog is to reduce the difficulty of manually monitoring large volumes of security logs by combining automated log processing, machine-learning-based anomaly detection, risk classification, and centralized visualization.
 
 ## Future Scope
-- Cloud deployment
-- Advanced sequence-based anomaly detection
-- Improved event correlation
-- Role-based access control
-- Audit logging
-- Advanced incident detection
-- Larger-scale performance evaluation
-- Integration with additional log sources
+Testing and Evaluation
+
+SmartLog can be evaluated using the following criteria:
+
+- Log ingestion: Whether supported events reach the processing pipeline.
+- API correctness: Whether backend endpoints return expected responses.
+- Classification performance: Precision, recall, and F1-score, where labelled test data is available.
+- Processing latency: Time taken to process an event through the relevant components.
+- Dashboard correctness: Whether displayed logs, counts, and alerts match the backend data.
+- Failure recovery: Whether fallback processing and retry behaviour work as intended.
+
+Report numerical performance results only after conducting the corresponding experiments.
 ## Disclaimer
 
 SmartLog is an academic project developed for security log monitoring, anomaly detection, and visualization research.
