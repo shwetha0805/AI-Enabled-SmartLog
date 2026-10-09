@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SmartLog | Security Monitoring</title>
+
+    <style>
+        
+        .health-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(auto-fit, minmax(180px, 1fr));
+
+    gap: 15px;
+
+    margin-top: 20px;
+}
+
+.health-card {
+
+    background: #111827;
+
+    border: 1px solid #374151;
+
+    border-radius: 10px;
+
+    padding: 20px;
+}
+
+.health-card-name {
+
+    font-size: 16px;
+
+    font-weight: bold;
+
+    margin-bottom: 12px;
+}
+
+.health-status {
+
+    font-size: 14px;
+
+    font-weight: bold;
+}
+
+.health-status.online {
+
+    color: #22c55e;
+}
+
+.health-status.offline {
+
+    color: #ef4444;
+}
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #0b1120;
+            color: #e5e7eb;
+            min-height: 100vh;
+        }
+
+
+        /* ==============================
+           LAYOUT
+        ============================== */
+
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 245px;
+            background: #0f172a;
+            border-right: 1px solid #1e293b;
+            padding: 25px 18px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 10px 30px;
+        }
+
+        .brand-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: #2563eb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 21px;
+            box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+        }
+
+        .brand h1 {
+            font-size: 19px;
+            color: #fff;
+        }
+
+        .brand span {
+            display: block;
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        .nav-title {
+            font-size: 10px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1.4px;
+            padding: 0 12px;
+            margin-bottom: 10px;
+        }
+
+        .nav-item {
+            padding: 12px 14px;
+            border-radius: 9px;
+            margin-bottom: 5px;
+            color: #94a3b8;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .nav-item.active {
+            background: #1e293b;
+            color: #60a5fa;
+        }
+
+        .nav-item:hover {
+            background: #172033;
+        }
+
+        .system-status {
+            position: absolute;
+            bottom: 25px;
+            left: 18px;
+            right: 18px;
+            background: #111c30;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #22c55e;
+        }
+
+        .main {
+            margin-left: 245px;
+            width: calc(100% - 245px);
+            padding: 30px 35px;
+        }
+
+
+        /* ==============================
+           HEADER
+        ============================== */
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+        }
+
+        .page-title h2 {
+            font-size: 26px;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+
+        .page-title p {
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .live-status {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 9px 13px;
+            background: #0f2119;
+            border: 1px solid #14532d;
+            border-radius: 8px;
+            color: #4ade80;
+            font-size: 12px;
+        }
+
+        button {
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .refresh-btn {
+            background: #2563eb;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .refresh-btn:hover {
+            background: #1d4ed8;
+        }
+
+
+        /* ==============================
+           STATISTICS
+        ============================== */
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 17px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: #111827;
+            border: 1px solid #1e293b;
+            border-radius: 13px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::after {
+            content: "";
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            right: -30px;
+            top: -30px;
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        .stat-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .stat-label {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .stat-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #172554;
+            color: #60a5fa;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .stat-sub {
+            color: #64748b;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+
+        /* ==============================
+           CONTENT
+        ============================== */
+
+        .content-card {
+            background: #111827;
+            border: 1px solid #1e293b;
+            border-radius: 13px;
+            overflow: hidden;
+        }
+
+        .content-header {
+            padding: 20px;
+            border-bottom: 1px solid #1e293b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .content-title h3 {
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .content-title p {
+            color: #64748b;
+            font-size: 11px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 9px;
+        }
+
+        .search-box,
+        .severity-filter {
+            background: #0b1120;
+            border: 1px solid #334155;
+            color: #cbd5e1;
+            padding: 9px 12px;
+            border-radius: 7px;
+            outline: none;
+            font-size: 12px;
+        }
+
+        .search-box {
+            width: 200px;
+        }
+
+        .search-box:focus,
+        .severity-filter:focus {
+            border-color: #2563eb;
+        }
+
+
+        /* ==============================
+           TABLE
+        ============================== */
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 850px;
+        }
+
+        thead {
+            background: #0d1525;
+        }
+
+        th {
+            text-align: left;
+            padding: 13px 17px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 14px 17px;
+            border-top: 1px solid #1e293b;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+
+        tbody tr:hover {
+            background: #151f31;
+        }
+
+        .event-name {
+            color: #f1f5f9;
+            font-weight: 600;
+        }
+
+        .timestamp {
+            color: #64748b;
+            white-space: nowrap;
+        }
+
+
+        /* ==============================
+           BADGES
+        ============================== */
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 5px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .severity-low {
+            background: #052e1a;
+            color: #4ade80;
+        }
+
+        .severity-medium {
+            background: #3b2503;
+            color: #fbbf24;
+        }
+
+        .severity-high {
+            background: #451a03;
+            color: #fb923c;
+        }
+
+        .severity-critical {
+            background: #450a0a;
+            color: #f87171;
+        }
+
+        .ai-normal {
+            background: #052e1a;
+            color: #4ade80;
+        }
+
+        .ai-anomaly {
+            background: #450a0a;
+            color: #f87171;
+        }
+
+        .risk-low {
+            color: #4ade80;
+        }
+
+        .risk-medium {
+            color: #fbbf24;
+        }
+
+        .risk-high {
+            color: #fb923c;
+        }
+
+
+        /* ==============================
+           EXTRA VIEWS
+        ============================== */
+
+        .extra-view {
+            display: none;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .view-card {
+            background: #111827;
+            border: 1px solid #1e293b;
+            border-radius: 13px;
+            padding: 28px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.20);
+        }
+
+        .view-card h3 {
+            color: #fff;
+            font-size: 21px;
+            margin-bottom: 7px;
+        }
+
+        .view-card p {
+            color: #64748b;
+            font-size: 13px;
+            margin-bottom: 25px;
+        }
+
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 17px;
+        }
+
+        .analysis-box {
+            background: #0d1525;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 22px;
+            min-height: 115px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: 0.2s ease;
+            cursor: pointer;
+        }
+
+        .analysis-box:hover {
+            transform: translateY(-3px);
+            border-color: #3b82f6;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+        }
+
+        .analysis-box h4 {
+            color: #64748b;
+            font-size: 10px;
+            letter-spacing: 0.8px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .analysis-box strong {
+            color: #fff;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .status-good {
+            color: #22c55e !important;
+        }
+
+        .status-info {
+            color: #60a5fa !important;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+
+        /* ==============================
+           CLICKED LOG DETAILS
+        ============================== */
+
+        #detailsArea {
+            margin-top: 25px;
+        }
+
+        #detailsArea .content-card {
+            margin-top: 0;
+        }
+
+
+        /* ==============================
+           FOOTER
+        ============================== */
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #475569;
+            font-size: 11px;
+        }
+
+
+        /* ==============================
+           RESPONSIVE
+        ============================== */
+
+        @media (max-width: 1100px) {
+
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+        }
+
+        @media (max-width: 750px) {
+
+            .sidebar {
+                display: none;
+            }
+
+            .main {
+                margin-left: 0;
+                width: 100%;
+                padding: 20px;
+            }
+
+            .topbar {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .content-header {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .filters {
+                width: 100%;
+            }
+
+            .search-box {
+                flex: 1;
+            }
+
+            .analysis-grid {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+        #criticalAlertPopup {
+
+    position: fixed;
+
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 100%;
+
+    background: rgba(0, 0, 0, 0.75);
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    z-index: 9999;
+}
+
+.critical-alert-box {
+
+    width: 450px;
+    max-width: 90%;
+
+    background: #111827;
+
+    border: 2px solid #ef4444;
+
+    border-radius: 12px;
+
+    padding: 25px;
+
+    box-shadow:
+        0 0 30px rgba(239, 68, 68, 0.5);
+}
+
+.critical-alert-title {
+
+    color: #ef4444;
+
+    font-size: 20px;
+
+    font-weight: bold;
+
+    margin-bottom: 15px;
+}
+
+.critical-alert-event {
+
+    font-size: 18px;
+
+    font-weight: bold;
+
+    margin-bottom: 15px;
+}
+
+.critical-alert-details p {
+
+    margin: 8px 0;
+
+    color: #d1d5db;
+}
+
+.critical-alert-actions {
+
+    display: flex;
+
+    gap: 10px;
+
+    margin-top: 20px;
+}
+
+.critical-alert-actions button {
+
+    flex: 1;
+
+    padding: 10px;
+
+    border: none;
+
+    border-radius: 6px;
+
+    cursor: pointer;
+
+    font-weight: bold;
+}
+
+.critical-alert-actions button:first-child {
+
+    background: #374151;
+
+    color: white;
+}
+
+.critical-alert-actions button:last-child {
+
+    background: #ef4444;
+
+    color: white;
+}
+
+
+
+
+
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="app">
+
+
+    <!-- ==========================================
+         SIDEBAR
+    =========================================== -->
+
+    <aside class="sidebar">
+
+        <div class="brand">
+
+            <div class="brand-icon">
+                🛡
+            </div>
+
+            <div>
+                <h1>SmartLog</h1>
+                <span>AI Security Monitor</span>
+            </div>
+
+        </div>
+
+
+        <div class="nav-title">
+            Monitoring
+        </div>
+
+
+        <div class="nav-item active" id="navDashboard">
+
+            <span>▦</span>
+
+            Security Dashboard
+
+        </div>
+
+
+        <div class="nav-item" id="navAnalytics">
+
+            <span>◉</span>
+
+            Log Analytics
+
+        </div>
+
+
+        <div class="nav-item" id="navThreats">
+
+            <span>⚠</span>
+
+            Threat Detection
+
+        </div>
+
+
+        <div class="nav-title" style="margin-top:25px;">
+
+            System
+
+        </div>
+
+
+        <div class="nav-item" id="navSystem">
+
+            <span>⚙</span>
+
+            System Status
+
+        </div>
+
+
+        <div class="system-status">
+
+            <div class="status-row">
+
+                <span class="status-dot"></span>
+
+                Monitoring Active
+
+            </div>
+
+            <div style="
+                font-size:10px;
+                color:#475569;
+                margin-top:7px;
+            ">
+
+                Auto-refresh enabled
+
+            </div>
+
+        </div>
+
+    </aside>
+
+
+
+    <!-- ==========================================
+         MAIN CONTENT
+    =========================================== -->
+
+    <main class="main">
+
+
+        <!-- ======================================
+             HEADER
+        ======================================= -->
+
+        <div class="topbar">
+
+            <div class="page-title">
+
+                <h2 id="pageTitle">
+                    Security Overview
+                </h2>
+
+                <p id="pageSubtitle">
+                    Real-time monitoring and anomaly detection
+                </p>
+
+            </div>
+
+
+            <div class="top-actions">
+
+                <div class="live-status">
+
+                    <span class="status-dot"></span>
+
+                    LIVE MONITORING
+
+                </div>
+
+
+                <button
+                    class="refresh-btn"
+                    id="refreshButton">
+
+                    ↻ Refresh
+
+                </button>
+
+            </div>
+
+        </div>
+
+
+
+        <!-- ======================================================
+             DASHBOARD VIEW
+
+             IMPORTANT:
+             Statistics + Logs are BOTH INSIDE this div.
+             Therefore they disappear when another view is selected.
+        ======================================================= -->
+
+        <div id="dashboardView">
+
+
+            <!-- ==============================================
+                 STATISTICS
+            =============================================== -->
+
+            <section class="stats">
+
+
+                <!-- TOTAL LOGS -->
+
+                <div class="stat-card">
+
+                    <div class="stat-top">
+
+                        <span class="stat-label">
+                            TOTAL LOGS
+                        </span>
+
+                        <div class="stat-icon">
+                            ▤
+                        </div>
+
+                    </div>
+
+                    <div
+                        class="stat-value"
+                        id="totalLogs">
+
+                        0
+
+                    </div>
+
+                    <div class="stat-sub">
+                        Logs collected
+                    </div>
+
+                </div>
+
+
+
+                <!-- ANOMALIES -->
+
+                <div class="stat-card">
+
+                    <div class="stat-top">
+
+                        <span class="stat-label">
+                            ANOMALIES
+                        </span>
+
+                        <div class="stat-icon">
+                            ⌁
+                        </div>
+
+                    </div>
+
+                    <div
+                        class="stat-value"
+                        id="anomalies">
+
+                        0
+
+                    </div>
+
+                    <div class="stat-sub">
+                        AI detected events
+                    </div>
+
+                </div>
+
+
+
+                <!-- HIGH RISK -->
+
+                <div class="stat-card">
+
+                    <div class="stat-top">
+
+                        <span class="stat-label">
+                            HIGH RISK
+                        </span>
+
+                        <div class="stat-icon">
+                            ⚠
+                        </div>
+
+                    </div>
+
+                    <div
+                        class="stat-value"
+                        id="highRisk">
+
+                        0
+
+                    </div>
+
+                    <div class="stat-sub">
+                        High / critical severity
+                    </div>
+
+                </div>
+
+
+
+                <!-- ACTIVE ALERTS -->
+
+                <div class="stat-card">
+
+                    <div class="stat-top">
+
+                        <span class="stat-label">
+                            ACTIVE ALERTS
+                        </span>
+
+                        <div class="stat-icon">
+                            !
+                        </div>
+
+                    </div>
+
+                    <div
+                        class="stat-value"
+                        id="alerts">
+
+                        0
+
+                    </div>
+
+                    <div class="stat-sub">
+                        Requiring attention
+                    </div>
+
+                </div>
+
+            </section>
+
+
+
+            <!-- ==============================================
+                 SECURITY EVENT LOGS
+            =============================================== -->
+
+            <section class="content-card">
+
+
+                <div class="content-header">
+
+
+                    <div class="content-title">
+
+                        <h3>
+                            Security Event Logs
+                        </h3>
+
+                        <p>
+                            Live events received from the SmartLog processing pipeline
+                        </p>
+
+                    </div>
+
+
+                    <div class="filters">
+
+
+                        <input
+                            type="text"
+                            id="searchInput"
+                            class="search-box"
+                            placeholder="Search logs..."
+                        >
+
+
+                        <select
+                            id="severityFilter"
+                            class="severity-filter">
+
+                            <option value="ALL">
+                                All Severity
+                            </option>
+
+                            <option value="LOW">
+                                Low
+                            </option>
+
+                            <option value="MEDIUM">
+                                Medium
+                            </option>
+
+                            <option value="HIGH">
+                                High
+                            </option>
+
+                            <option value="CRITICAL">
+                                Critical
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="table-wrapper">
+
+
+                    <table>
+
+
+                        <thead>
+
+                            <tr>
+
+                                <th>
+                                    Timestamp
+                                </th>
+
+                                <th>
+                                    User
+                                </th>
+
+                                <th>
+                                    Event
+                                </th>
+
+                                <th>
+                                    Severity
+                                </th>
+
+                                <th>
+                                    AI Status
+                                </th>
+
+                                <th>
+                                    Risk
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody id="logTable">
+
+
+                            <tr>
+
+                                <td
+                                    colspan="6"
+                                    style="
+                                        text-align:center;
+                                        color:#64748b;
+                                        padding:30px;
+                                    ">
+
+                                    Loading security logs...
+
+                                </td>
+
+                            </tr>
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+            </section>
+
+
+        </div>
+        <!-- END DASHBOARD VIEW -->
+
+
+
+        <!-- ======================================================
+             LOG ANALYTICS VIEW
+
+             This is hidden initially.
+             It appears ONLY when Log Analytics is clicked.
+        ======================================================= -->
+
+        <div
+            id="analyticsView"
+            class="extra-view">
+        </div>
+
+
+
+        <!-- ======================================================
+             THREAT DETECTION VIEW
+        ======================================================= -->
+
+        <div
+            id="threatView"
+            class="extra-view">
+        </div>
+
+
+
+        <!-- ======================================================
+             SYSTEM STATUS VIEW
+        ======================================================= -->
+
+        <div
+            id="systemView"
+            class="extra-view">
+        </div>
+
+
+
+        <!-- ==============================================
+             FOOTER
+        =============================================== -->
+
+        <div class="footer">
+
+            SmartLog • AI-Enabled Security Logging & Monitoring System
+
+        </div>
+
+
+    </main>
+
+</div>
+
+
+
+<!-- ==============================================
+     JAVASCRIPT
+=============================================== -->
+
+<script src="script.js"></script>
+
+
+</body>
+
+</html>

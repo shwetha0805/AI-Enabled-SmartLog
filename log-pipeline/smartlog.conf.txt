@@ -1,0 +1,58 @@
+input {
+    beats {
+        port => 5044
+    }
+}
+
+filter {
+    if [winlog][channel] == "Security" {
+        mutate {
+            add_field => {
+                "smartlog_source" => "WINDOWS_SECURITY"
+            }
+        }
+    } else if [winlog][channel] == "System" {
+        mutate {
+            add_field => {
+                "smartlog_source" => "WINDOWS_SYSTEM"
+            }
+        }
+    } else if [winlog][channel] == "Application" {
+        mutate {
+            add_field => {
+                "smartlog_source" => "WINDOWS_APPLICATION"
+            }
+        }
+    }
+
+    if [winlog][channel] == "Microsoft-Windows-PowerShell/Operational" {
+        mutate {
+            add_field => {
+                "smartlog_source" => "WINDOWS_POWERSHELL"
+            }
+        }
+    }
+
+    if [event][code] == "4625" {
+        mutate {
+            add_field => {
+                "smartlog_risk" => "MEDIUM"
+            }
+        }
+    }
+}
+
+output {
+    elasticsearch {
+        hosts => ["https://localhost:9200"]
+        index => "smartlog-windows"
+        user => "elastic"
+        password => "${ES_PASSWORD}"
+        ssl_enabled => true
+        ssl_verification_mode => "none"
+    }
+
+    stdout {
+        codec => rubydebug
+    }
+}
