@@ -1,19 +1,36 @@
 from flask import Flask, request
+import json
+import os
 
 import joblib
-
+import numpy as np
+from flask import Flask, request
 
 app = Flask(__name__)
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-MODEL_PATH = "model/isolation_forest.joblib"
-VECTORIZER_PATH = "model/vectorizer.joblib"
+MODEL_PATH = os.path.join(BASE_DIR, "model", "isolation_forest.joblib")
+VECTORIZER_PATH = os.path.join(BASE_DIR, "model", "vectorizer.joblib")
 
+CANDIDATE_MODEL_PATH = os.path.join(
+    BASE_DIR, "candidate_model", "isolation_forest_candidate.joblib"
+)
+
+CANDIDATE_METADATA_PATH = os.path.join(
+    BASE_DIR, "candidate_model", "metadata.json"
+)
 
 model = joblib.load(MODEL_PATH)
 vectorizer = joblib.load(VECTORIZER_PATH)
 
+candidate_model = joblib.load(CANDIDATE_MODEL_PATH)
 
+with open(CANDIDATE_METADATA_PATH, "r", encoding="utf-8") as f:
+    candidate_metadata = json.load(f)
+
+candidate_features = candidate_metadata["feature_names"]
+candidate_count_features = candidate_metadata["count_features_log_transformed"]
 def rule_based_risk(severity, event_type, message):
 
     severity = severity.upper()
@@ -102,11 +119,6 @@ def analyze_log():
     )
 
 
-    if anomaly and risk == "LOW":
-        risk = "MEDIUM"
-        reason = "ML model detected unusual event behavior"
-
-
     return {
         "anomaly": bool(anomaly),
         "risk": risk,
@@ -116,6 +128,44 @@ def analyze_log():
         "anomalyScore": float(anomaly_score),
         "model": "Isolation Forest"
     }
+
+@app.route("/analyze-window", methods=["POST"])
+def analyze_window():
+
+    data = request.get_json() or {}
+
+    try:
+        features = []
+
+        for name in candidate_features:
+            value = float(data.get(name, 0))
+
+            if not np.isfinite(value):
+                return {"error": f"Invalid feature value: {name}"}, 400
+
+            if value < 0:
+                return {"error": f"Negative feature value: {name}"}, 400
+
+            if name in candidate_count_features:
+                value = np.log1p(value)
+
+            features.append(value)
+
+        X = np.array(features, dtype=float).reshape(1, -1)
+
+        prediction = candidate_model.predict(X)[0]
+        anomaly_score = candidate_model.decision_function(X)[0]
+
+        return {
+            "anomaly": bool(prediction == -1),
+            "prediction": "ANOMALY" if prediction == -1 else "NORMAL",
+            "anomalyScore": float(anomaly_score),
+            "model": "Candidate Isolation Forest",
+            "featureCount": len(candidate_features)
+        }
+
+    except (ValueError, TypeError) as e:
+        return {"error": str(e)}, 400
 
 
 @app.route("/health", methods=["GET"])

@@ -1,4 +1,8 @@
+
+import argparse
 import os
+from pathlib import Path
+
 import requests
 import joblib
 
@@ -6,151 +10,161 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.ensemble import IsolationForest
 
 
-ES_URL = (
-    "https://100.94.231.105:9200/"
-    "smartlog-windows/_search"
-    "?size=200&sort=@timestamp:asc"
-)
+BASE_DIR = Path(__file__).resolve().parent
 
-USERNAME = "elastic"
-PASSWORD = os.getenv("SMARTLOG_ES_PASSWORD")
 
-if not PASSWORD:
-    raise RuntimeError(
-        "SMARTLOG_ES_PASSWORD environment variable is not set."
+def main():
+    parser = argparse.ArgumentParser(
+        description="Train the SmartLog production Isolation Forest model."
     )
 
-
-print("Connecting to Elasticsearch...")
-
-response = requests.get(
-    ES_URL,
-    auth=(USERNAME, PASSWORD),
-    verify=False,
-    timeout=20
-)
-
-if response.status_code != 200:
-    raise RuntimeError(
-        f"Elasticsearch returned HTTP {response.status_code}: "
-        f"{response.text}"
+    parser.add_argument(
+        "--url",
+        default=os.getenv(
+            "SMARTLOG_ES_URL",
+            "http://localhost:9200/smartlog-windows/_search"
+            "?size=200&sort=@timestamp:asc"
+        ),
+        help="Full Elasticsearch search endpoint URL."
     )
 
-data = response.json()
-
-hits = data.get("hits", {}).get("hits", [])
-
-print(f"Events received: {len(hits)}")
-
-if len(hits) < 10:
-    raise RuntimeError(
-        "Not enough real Windows events for training. "
-        "Need at least 10 events."
+    parser.add_argument(
+        "--username",
+        default=os.getenv("SMARTLOG_ES_USERNAME", "elastic"),
+        help="Elasticsearch username, if authentication is enabled."
     )
 
+    parser.add_argument(
+        "--password",
+        default=os.getenv("SMARTLOG_ES_PASSWORD"),
+        help="Elasticsearch password, if authentication is enabled."
+    )
 
-records = []
+    parser.add_argument(
+        "--ca-cert",
+        default=os.getenv("SMARTLOG_ES_CA_CERT"),
+        help="Path to the Elasticsearch CA certificate for HTTPS."
+    )
 
-for hit in hits:
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help="Disable TLS certificate verification (not recommended)."
+    )
 
-    source = hit.get("_source", {})
+    args = parser.parse_args()
 
-    winlog = source.get("winlog", {})
-    event = source.get("event", {})
-    event_data = winlog.get("event_data", {})
+    if args.insecure and args.ca_cert:
+        parser.error("--insecure and --ca-cert cannot be used together.")
 
-    event_code = str(
-        event.get(
-            "code",
-            winlog.get("event_id", "UNKNOWN")
+    auth = (
+        (args.username, args.password)
+        if args.password
+        else None
+    )
+
+    verify = args.ca_cert if args.ca_cert else not args.insecure
+
+    print("Connecting to Elasticsearch...")
+
+    response = requests.get(
+        args.url,
+        auth=auth,
+        verify=verify,
+        timeout=20
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Elasticsearch returned HTTP {response.status_code}: "
+            f"{response.text}"
         )
-    )
 
-    event_type = str(
-        event.get(
-            "action",
-            "UNKNOWN"
+    data = response.json()
+    hits = data.get("hits", {}).get("hits", [])
+
+    print(f"Events received: {len(hits)}")
+
+    if len(hits) < 10:
+        raise RuntimeError(
+            "Not enough real Windows events for training. "
+            "Need at least 10 events."
         )
-    )
 
-    outcome = str(
-        event.get(
-            "outcome",
-            "UNKNOWN"
+    records = []
+
+    for hit in hits:
+        source = hit.get("_source", {})
+
+        winlog = source.get("winlog", {})
+        event = source.get("event", {})
+        event_data = winlog.get("event_data", {})
+
+        event_code = str(
+            event.get("code", winlog.get("event_id", "UNKNOWN"))
         )
-    )
 
-    channel = str(
-        winlog.get(
-            "channel",
-            "UNKNOWN"
+        event_type = str(
+            event.get("action", "UNKNOWN")
         )
-    )
 
-    severity = str(
-        source.get(
-            "severity",
-            "LOW"
+        outcome = str(
+            event.get("outcome", "UNKNOWN")
         )
-    )
 
-    logon_type = str(
-        event_data.get(
-            "LogonType",
-            "UNKNOWN"
+        channel = str(
+            winlog.get("channel", "UNKNOWN")
         )
+
+        severity = str(
+            source.get("severity", "LOW")
+        )
+
+        logon_type = str(
+            event_data.get("LogonType", "UNKNOWN")
+        )
+
+        records.append({
+            "event_code": event_code,
+            "event_type": event_type,
+            "outcome": outcome,
+            "channel": channel,
+            "severity": severity,
+            "logon_type": logon_type
+        })
+
+    print("Preparing ML features...")
+
+    vectorizer = DictVectorizer(sparse=True)
+    X = vectorizer.fit_transform(records)
+
+    print(f"Training samples: {X.shape[0]}")
+    print(f"Features: {X.shape[1]}")
+
+    model = IsolationForest(
+        n_estimators=200,
+        contamination="auto",
+        random_state=42
     )
 
-    records.append({
-        "event_code": event_code,
-        "event_type": event_type,
-        "outcome": outcome,
-        "channel": channel,
-        "severity": severity,
-        "logon_type": logon_type
-    })
+    model.fit(X)
+
+    model_dir = BASE_DIR / "model"
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    model_path = model_dir / "isolation_forest.joblib"
+    vectorizer_path = model_dir / "vectorizer.joblib"
+
+    joblib.dump(model, model_path)
+    joblib.dump(vectorizer, vectorizer_path)
+
+    print()
+    print("====================================")
+    print("ML MODEL TRAINING COMPLETE")
+    print("====================================")
+    print("Model saved:", model_path)
+    print("Vectorizer saved:", vectorizer_path)
 
 
-print("Preparing ML features...")
-
-vectorizer = DictVectorizer(
-    sparse=True
-)
-
-X = vectorizer.fit_transform(records)
-
-print(f"Training samples: {X.shape[0]}")
-print(f"Features: {X.shape[1]}")
-
-
-model = IsolationForest(
-    n_estimators=200,
-    contamination="auto",
-    random_state=42
-)
-
-model.fit(X)
-
-
-os.makedirs("model", exist_ok=True)
-
-joblib.dump(
-    model,
-    "model/isolation_forest.joblib"
-)
-
-joblib.dump(
-    vectorizer,
-    "model/vectorizer.joblib"
-)
-
-
-print()
-print("====================================")
-print("ML MODEL TRAINING COMPLETE")
-print("====================================")
-print("Model saved:")
-print("model/isolation_forest.joblib")
-print()
-print("Vectorizer saved:")
-print("model/vectorizer.joblib")
+if __name__ == "__main__":
+    main()

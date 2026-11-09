@@ -7,7 +7,7 @@
 // API CONFIGURATION
 // =====================================================
 
-const API_BASE = "http://100.85.174.53:8080/api";
+const API_BASE = "http://localhost:8080/api";
 
 const API_URL = `${API_BASE}/logs`;
 const DASHBOARD_API = `${API_BASE}/dashboard`;
@@ -23,7 +23,7 @@ let currentView = "dashboard";
 
 let activeAlerts = [];
 let acknowledgedAlerts = [];
-
+let dismissedAlertIds = [];
 
 // =====================================================
 // LOAD LOGS
@@ -86,17 +86,13 @@ async function loadLogs() {
 // DASHBOARD STATISTICS
 // =====================================================
 
+
 async function updateDashboard() {
-
     try {
-
-        const response =
-            await fetch(`${DASHBOARD_API}/stats`);
+        const response = await fetch(`${DASHBOARD_API}/stats`);
 
         if (!response.ok) {
-            throw new Error(
-                "Dashboard API error: " + response.status
-            );
+            throw new Error("Dashboard API error: " + response.status);
         }
 
         const stats = await response.json();
@@ -110,17 +106,15 @@ async function updateDashboard() {
         document.getElementById("highRisk").textContent =
             stats.highRisk ?? 0;
 
+        // Active alerts are HIGH or CRITICAL severity logs.
         document.getElementById("alerts").textContent =
-            stats.critical ?? 0;
+            stats.highRisk ?? 0;
 
     } catch (error) {
-
-        console.error(
-            "Error loading dashboard statistics:",
-            error
-        );
+        console.error("Error loading dashboard statistics:", error);
     }
 }
+
 
 
 // =====================================================
@@ -164,7 +158,6 @@ async function loadAlerts() {
 
         const response =
             await fetch(`${DASHBOARD_API}/alerts`);
-
         if (!response.ok) {
             throw new Error(
                 "Alerts API error: " + response.status
@@ -198,27 +191,27 @@ async function loadAlerts() {
 
 function checkCriticalAlerts(alerts) {
 
-    const criticalAlerts = alerts.filter(
-        log =>
-            String(log.severity || "")
-                .toUpperCase() === "CRITICAL"
+    // Do not interrupt other pages with pop-ups.
+    if (currentView !== "dashboard") return;
+
+    // Do not create another popup if one is already visible.
+    if (document.getElementById("criticalAlertPopup")) return;
+
+    const importantAlerts = alerts.filter(log => {
+        const severity = String(log.severity || "").toUpperCase();
+
+        return severity === "HIGH" || severity === "CRITICAL";
+    });
+
+    const latestAlert = importantAlerts.find(log =>
+        !acknowledgedAlerts.includes(log.id) &&
+        !dismissedAlertIds.includes(log.id)
     );
 
-    if (criticalAlerts.length === 0) {
-        return;
-    }
+    if (!latestAlert) return;
 
-    const latestCritical = criticalAlerts[0];
-
-    const alertId = latestCritical.id;
-
-    if (acknowledgedAlerts.includes(alertId)) {
-        return;
-    }
-
-    showCriticalAlert(latestCritical);
+    showCriticalAlert(latestAlert);
 }
-
 
 // =====================================================
 // CRITICAL ALERT POPUP
@@ -229,21 +222,20 @@ function showCriticalAlert(log) {
     const existing =
         document.getElementById("criticalAlertPopup");
 
-    if (existing) {
-        existing.remove();
-    }
+    if (existing) return;
 
     const popup =
         document.createElement("div");
 
     popup.id = "criticalAlertPopup";
+    popup.dataset.alertId = log.id;
 
     popup.innerHTML = `
 
         <div class="critical-alert-box">
 
             <div class="critical-alert-title">
-                🚨 CRITICAL SECURITY ALERT
+    🚨              SECURITY ALERT
             </div>
 
             <div class="critical-alert-event">
@@ -291,6 +283,11 @@ function showCriticalAlert(log) {
                     ACKNOWLEDGE
                 </button>
 
+                <button
+                    onclick="dismissCriticalAlert(${log.id})">
+                    CLOSE
+                </button>
+
             </div>
 
         </div>
@@ -299,6 +296,21 @@ function showCriticalAlert(log) {
     document.body.appendChild(popup);
 }
 
+function dismissCriticalAlert(id) {
+
+    if (!dismissedAlertIds.includes(id)) {
+        dismissedAlertIds.push(id);
+    }
+
+    const popup =
+        document.getElementById("criticalAlertPopup");
+
+    if (popup) {
+        popup.remove();
+    }
+
+    console.log("Alert dismissed:", id);
+}
 
 // =====================================================
 // ACKNOWLEDGE ALERT
@@ -331,6 +343,10 @@ function acknowledgeAlert(id) {
 // =====================================================
 
 function viewAlertDetails(id) {
+
+    if (!dismissedAlertIds.includes(id)) {
+        dismissedAlertIds.push(id);
+    }
 
     const log =
         allLogs.find(
@@ -399,6 +415,10 @@ function applyFilters() {
 
             const searchMatch =
                 searchText === "" ||
+
+                String(log.id || "")
+                 .toLowerCase()
+                     .includes(searchText) ||
 
                 String(log.username || "")
                     .toLowerCase()
@@ -568,6 +588,21 @@ async function refreshDashboard() {
     }
 }
 
+function dismissPopupOnNavigation() {
+
+    const popup =
+        document.getElementById("criticalAlertPopup");
+
+    if (!popup) return;
+
+    const id = Number(popup.dataset.alertId);
+
+    if (!dismissedAlertIds.includes(id)) {
+        dismissedAlertIds.push(id);
+    }
+
+    popup.remove();
+}
 
 // =====================================================
 // SHOW DASHBOARD
@@ -593,125 +628,112 @@ function showDashboard() {
         "systemView"
     ).style.display = "none";
 
+    document.getElementById("windowAiView").style.display = "none";
+
     setActiveNav("navDashboard");
 
     applyFilters();
 }
 
+// =====================================================
+// AI MONITORING
+// =====================================================
+
+function showWindowAI() {
+
+    dismissPopupOnNavigation();
+
+    currentView = "windowAI";
+
+    document.getElementById("dashboardView").style.display = "none";
+    document.getElementById("analyticsView").style.display = "none";
+    document.getElementById("threatView").style.display = "none";
+    document.getElementById("systemView").style.display = "none";
+    document.getElementById("windowAiView").style.display = "block";
+
+    setActiveNav("navWindowAI");
+
+    loadWindowPredictions();
+}
 
 // =====================================================
 // LOG ANALYTICS
 // =====================================================
 
-function showAnalytics() {
 
+function showAnalytics() {
+    dismissPopupOnNavigation();
     currentView = "analytics";
 
-    document.getElementById(
-        "dashboardView"
-    ).style.display = "none";
-
-    document.getElementById(
-        "analyticsView"
-    ).style.display = "block";
-
-    document.getElementById(
-        "threatView"
-    ).style.display = "none";
-
-    document.getElementById(
-        "systemView"
-    ).style.display = "none";
+    document.getElementById("dashboardView").style.display = "none";
+    document.getElementById("analyticsView").style.display = "block";
+    document.getElementById("threatView").style.display = "none";
+    document.getElementById("systemView").style.display = "none";
+    document.getElementById("windowAiView").style.display = "none";
 
     setActiveNav("navAnalytics");
 
-    const loginLogs =
-        allLogs.filter(log =>
-            String(log.eventType || "")
-                .toUpperCase()
-                .includes("LOGIN")
-        );
+    const categories = [
+        {
+            title: "PowerShell Script Block Events",
+            type: "PS_SCRIPT",
+            codes: ["4104"]
+        },
+        {
+            title: "PowerShell Provider / Engine Events",
+            type: "PS_PROVIDER",
+            codes: ["400", "600"]
+        },
+        {
+            title: "Credential Manager Events",
+            type: "CREDENTIAL",
+            codes: ["5379"]
+        },
+        {
+            title: "Windows Logon Events",
+            type: "LOGON",
+            codes: ["4624", "4625", "4634", "4647", "4648"]
+        }
+    ];
 
-    const fileLogs =
-        allLogs.filter(log =>
-            String(log.eventType || "")
-                .toUpperCase()
-                .includes("FILE")
-        );
+    const cards = categories.map(category => {
+        const count = allLogs.filter(log =>
+            category.codes.includes(String(log.eventCode || ""))
+        ).length;
 
-    const suspiciousLogs =
-        allLogs.filter(log =>
-            String(log.eventType || "")
-                .toUpperCase()
-                .includes("SUSPICIOUS")
-        );
+        return `
+            <div class="analysis-box"
+                 onclick="showLogDetails('${category.title}', '${category.type}')">
 
-    document.getElementById(
-        "analyticsView"
-    ).innerHTML = `
+                <h4>${category.title}</h4>
+                <strong>${count}</strong>
+                <p>Matching events</p>
 
+            </div>
+        `;
+    }).join("");
+
+    document.getElementById("analyticsView").innerHTML = `
         <div class="view-card">
 
             <h3>Log Analytics</h3>
 
             <p>
-                Analyse security events collected by SmartLog.
-                Click a category to view the corresponding logs.
+                Explore Windows security and system events
+                collected by SmartLog. Select a category
+                to inspect its matching records.
             </p>
 
             <div class="analysis-grid">
-
-                <div class="analysis-box"
-                     onclick="showLogDetails(
-                         'Login Events',
-                         'LOGIN'
-                     )">
-
-                    <h4>LOGIN EVENTS</h4>
-
-                    <strong>
-                        ${loginLogs.length}
-                    </strong>
-
-                </div>
-
-
-                <div class="analysis-box"
-                     onclick="showLogDetails(
-                         'File Access Events',
-                         'FILE'
-                     )">
-
-                    <h4>FILE ACCESS</h4>
-
-                    <strong>
-                        ${fileLogs.length}
-                    </strong>
-
-                </div>
-
-
-                <div class="analysis-box"
-                     onclick="showLogDetails(
-                         'Suspicious Activity',
-                         'SUSPICIOUS'
-                     )">
-
-                    <h4>SUSPICIOUS ACTIVITY</h4>
-
-                    <strong>
-                        ${suspiciousLogs.length}
-                    </strong>
-
-                </div>
-
+                ${cards}
             </div>
 
-            <div id="detailsArea"></div>
+            <div id="analyticsDetailsArea"></div>
 
         </div>
     `;
 }
+
 
 
 // =====================================================
@@ -720,6 +742,7 @@ function showAnalytics() {
 
 function showThreats() {
 
+    dismissPopupOnNavigation();
     currentView = "threats";
 
     document.getElementById(
@@ -736,6 +759,10 @@ function showThreats() {
 
     document.getElementById(
         "systemView"
+    ).style.display = "none";
+
+    document.getElementById(
+        "windowAiView"
     ).style.display = "none";
 
     setActiveNav("navThreats");
@@ -837,6 +864,7 @@ function showThreats() {
 
 async function showSystemStatus() {
 
+    dismissPopupOnNavigation();
     currentView = "system";
 
     document.getElementById(
@@ -850,6 +878,10 @@ async function showSystemStatus() {
     document.getElementById(
         "threatView"
     ).style.display = "none";
+
+    document.getElementById(
+        "windowAiView"
+          ).style.display = "none";
 
     const systemView =
         document.getElementById("systemView");
@@ -982,223 +1014,238 @@ function createHealthCard(name, status) {
 
 function showLogDetails(titleOrLog, type) {
 
-    // Critical alert can pass the actual log object
-    if (
-    typeof titleOrLog === "object" &&
-    titleOrLog !== null
-) {
-
-    const log = titleOrLog;
-
-    const area =
-        document.getElementById("detailsArea");
+    // Select the correct details container.
+    const area = document.getElementById(
+        currentView === "analytics"
+            ? "analyticsDetailsArea"
+            : "detailsArea"
+    );
 
     if (!area) {
-        console.error("detailsArea not found");
+        console.error("Log details container not found.");
         return;
     }
 
-    area.innerHTML = `
+    // -----------------------------------------
+    // CASE 1: A specific log object was selected
+    // -----------------------------------------
 
-        <div class="content-card">
+    if (
+        typeof titleOrLog === "object" &&
+        titleOrLog !== null
+    ) {
 
-            <div class="content-header">
+        const log = titleOrLog;
 
-                <div class="content-title">
+        area.innerHTML = `
+            <div class="content-card">
 
-                    <h3>🚨 Security Alert Details</h3>
+                <div class="content-header">
 
-                    <p>Critical security event</p>
+                    <div class="content-title">
+                        <h3>Security Alert Details</h3>
+                        <p>Selected security event</p>
+                    </div>
+
+                    <button
+                        class="refresh-btn"
+                        onclick="closeDetails()">
+                        Close
+                    </button>
 
                 </div>
 
-                <button
-                    class="refresh-btn"
-                    onclick="closeDetails()">
+                <div style="padding:25px; line-height:1.8;">
 
-                    ✕ Close
+                    <p><strong>Timestamp:</strong>
+                        ${log.timestamp || "-"}</p>
 
-                </button>
+                    <p><strong>User:</strong>
+                        ${log.username || "Unknown"}</p>
 
-            </div>
+                    <p><strong>Event:</strong>
+                        ${log.eventType || "Unknown"}</p>
 
+                    <p><strong>Event Code:</strong>
+                        ${log.eventCode || "Unknown"}</p>
 
-            <div style="
-                padding: 25px;
-                line-height: 1.8;
-            ">
+                    <p><strong>Severity:</strong>
+                        ${log.severity || "Unknown"}</p>
 
-                <p>
-                    <strong>Timestamp:</strong>
-                    ${log.timestamp || "-"}
-                </p>
+                    <p><strong>AI Status:</strong>
+                        ${log.aiStatus || "Unknown"}</p>
 
-                <p>
-                    <strong>User:</strong>
-                    ${log.username || "Unknown"}
-                </p>
+                    <p><strong>Risk:</strong>
+                        ${log.label || "Unknown"}</p>
 
-                <p>
-                    <strong>Event:</strong>
-                    ${log.eventType || "Unknown"}
-                </p>
+                    <p><strong>Source IP:</strong>
+                        ${log.sourceIp || "Unknown"}</p>
 
-                <p>
-                    <strong>Event Code:</strong>
-                    ${log.eventCode || "Unknown"}
-                </p>
+                    <p><strong>Elasticsearch ID:</strong>
+                        ${log.elasticsearchId || "Unknown"}</p>
 
-                <p>
-                    <strong>Severity:</strong>
-                    ${log.severity || "Unknown"}
-                </p>
+                    <p><strong>Message:</strong>
+                        ${log.message || "No message available"}</p>
 
-                <p>
-                    <strong>AI Status:</strong>
-                    ${log.aiStatus || "Unknown"}
-                </p>
-
-                <p>
-                    <strong>Risk:</strong>
-                    ${log.label || "Unknown"}
-                </p>
-
-                <p>
-                    <strong>Source IP:</strong>
-                    ${log.sourceIp || "Unknown"}
-                </p>
-
-                <p>
-                    <strong>Elasticsearch ID:</strong>
-                    ${log.elasticsearchId || "Unknown"}
-                </p>
-
-                <p>
-                    <strong>Message:</strong>
-                    ${log.message || "No message available"}
-                </p>
+                </div>
 
             </div>
-
-        </div>
-
-    `;
-
-    return;
-}
-
-    const title =
-        titleOrLog;
-
-    const area =
-        document.getElementById("detailsArea");
-
-    if (!area) {
-
-        console.error(
-            "detailsArea not found"
-        );
+        `;
 
         return;
     }
 
+    // -----------------------------------------
+    // CASE 2: An Analytics or Threat card was selected
+    // -----------------------------------------
+
+    const title = titleOrLog;
+
     let logs = [];
 
+    const eventCode = log =>
+        String(log.eventCode || "").trim();
 
-    // LOGIN EVENTS
+    const eventType = log =>
+        String(log.eventType || "").toUpperCase();
 
-    if (type === "LOGIN") {
+    const severity = log =>
+        String(log.severity || "").toUpperCase();
 
-        logs =
-            allLogs.filter(log =>
-                String(log.eventType || "")
-                    .toUpperCase()
-                    .includes("LOGIN")
-            );
+    const risk = log =>
+        String(log.label || "").toUpperCase();
+
+    const aiStatus = log =>
+        String(log.aiStatus || "").toUpperCase();
+
+
+    // POWER SHELL SCRIPT BLOCK EVENTS
+    if (type === "PS_SCRIPT") {
+
+        logs = allLogs.filter(log =>
+            eventCode(log) === "4104"
+        );
+
     }
 
+    // POWER SHELL PROVIDER / ENGINE EVENTS
+    else if (type === "PS_PROVIDER") {
 
-    // FILE ACCESS
+        logs = allLogs.filter(log =>
+            ["400", "600"].includes(eventCode(log))
+        );
 
+    }
+
+    // CREDENTIAL MANAGER EVENTS
+    else if (type === "CREDENTIAL") {
+
+        logs = allLogs.filter(log =>
+            eventCode(log) === "5379"
+        );
+
+    }
+
+    // WINDOWS LOGON EVENTS
+    else if (type === "LOGON") {
+
+        logs = allLogs.filter(log =>
+            ["4624", "4625", "4634", "4647", "4648"]
+                .includes(eventCode(log)) ||
+            eventType(log).includes("LOGON") ||
+            eventType(log).includes("LOGIN")
+        );
+
+    }
+
+    // LEGACY LOGIN CATEGORY
+    else if (type === "LOGIN") {
+
+        logs = allLogs.filter(log =>
+            eventType(log).includes("LOGIN") ||
+            eventType(log).includes("LOGON")
+        );
+
+    }
+
+    // LEGACY FILE CATEGORY
     else if (type === "FILE") {
 
-        logs =
-            allLogs.filter(log =>
-                String(log.eventType || "")
-                    .toUpperCase()
-                    .includes("FILE")
-            );
+        logs = allLogs.filter(log =>
+            eventType(log).includes("FILE")
+        );
+
     }
 
-
-    // SUSPICIOUS ACTIVITY
-
+    // LEGACY SUSPICIOUS CATEGORY
     else if (type === "SUSPICIOUS") {
 
-        logs =
-            allLogs.filter(log =>
-                String(log.eventType || "")
-                    .toUpperCase()
-                    .includes("SUSPICIOUS")
-            );
-    }
+        logs = allLogs.filter(log =>
+            eventType(log).includes("SUSPICIOUS")
+        );
 
+    }
 
     // AI ANOMALIES
-
     else if (type === "ANOMALY") {
 
-        logs =
-            allLogs.filter(log =>
-                String(log.aiStatus || "")
-                    .toUpperCase() === "ANOMALY"
-            );
+        logs = allLogs.filter(log =>
+            aiStatus(log) === "ANOMALY"
+        );
+
     }
 
+    // HIGH / CRITICAL AI RISK
+    else if (
+        type === "HIGH_AI_RISK" ||
+        type === "HIGH_RISK"
+    ) {
 
-    // HIGH RISK
+        logs = allLogs.filter(log =>
+            ["HIGH", "CRITICAL"].includes(risk(log))
+        );
 
-    else if (type === "HIGH_RISK") {
-
-        logs =
-            allLogs.filter(log =>
-                ["HIGH", "CRITICAL"].includes(
-                    String(log.severity || "")
-                        .toUpperCase()
-                )
-            );
     }
 
+    // CRITICAL AI RISK
+    else if (type === "CRITICAL_AI_RISK") {
 
-    // CRITICAL
+        logs = allLogs.filter(log =>
+            risk(log) === "CRITICAL"
+        );
 
+    }
+
+    // HIGH / CRITICAL WINDOWS SEVERITY
+    else if (type === "HIGH_SEVERITY") {
+
+        logs = allLogs.filter(log =>
+            ["HIGH", "CRITICAL"].includes(severity(log))
+        );
+
+    }
+
+    // CRITICAL WINDOWS SEVERITY
     else if (type === "CRITICAL") {
 
-        logs =
-            allLogs.filter(log =>
-                String(log.severity || "")
-                    .toUpperCase() === "CRITICAL"
-            );
+        logs = allLogs.filter(log =>
+            severity(log) === "CRITICAL"
+        );
+
     }
 
+    console.log("Selected category:", title);
+    console.log("Matching logs:", logs);
 
-    console.log(
-        "Selected:",
-        title
-    );
 
-    console.log(
-        "Matching logs:",
-        logs
-    );
-
+    // -----------------------------------------
+    // NO MATCHING LOGS
+    // -----------------------------------------
 
     if (logs.length === 0) {
 
         area.innerHTML = `
-
-            <div class="content-card"
-                 style="margin-top:25px;">
+            <div class="content-card" style="margin-top:25px;">
 
                 <div style="
                     padding:30px;
@@ -1206,46 +1253,45 @@ function showLogDetails(titleOrLog, type) {
                     color:#64748b;
                 ">
 
-                    No logs found for ${title}.
+                    <h3>No matching logs found</h3>
+
+                    <p>
+                        No records were found for ${title}.
+                    </p>
 
                 </div>
 
             </div>
-
         `;
 
         return;
     }
 
 
-    let rows = "";
+    // -----------------------------------------
+    // BUILD LOG TABLE
+    // -----------------------------------------
 
+    let rows = "";
 
     logs.forEach(log => {
 
-        const severity =
-            String(
-                log.severity || "LOW"
-            ).toLowerCase();
+        const severityValue =
+            String(log.severity || "LOW").toLowerCase();
 
-        const aiStatus =
-            String(
-                log.aiStatus || "PENDING"
-            ).toUpperCase();
+        const aiValue =
+            String(log.aiStatus || "PENDING").toUpperCase();
 
         const aiClass =
-            aiStatus === "ANOMALY"
+            aiValue === "ANOMALY"
                 ? "ai-anomaly"
                 : "ai-normal";
 
-        const risk =
-            String(
-                log.label || "LOW"
-            ).toLowerCase();
+        const riskValue =
+            String(log.label || "LOW").toLowerCase();
 
 
         rows += `
-
             <tr>
 
                 <td class="timestamp">
@@ -1261,34 +1307,31 @@ function showLogDetails(titleOrLog, type) {
                 </td>
 
                 <td>
-
-                    <span class="badge severity-${severity}">
+                    <span class="badge severity-${severityValue}">
                         ${log.severity || "LOW"}
                     </span>
-
                 </td>
 
                 <td>
-
                     <span class="badge ${aiClass}">
-                        ${aiStatus}
+                        ${aiValue}
                     </span>
-
                 </td>
 
                 <td>
-
-                    <span class="risk-${risk}">
+                    <span class="risk-${riskValue}">
                         ${log.label || "LOW"}
                     </span>
-
                 </td>
 
             </tr>
-
         `;
     });
 
+
+    // -----------------------------------------
+    // DISPLAY MATCHING LOGS
+    // -----------------------------------------
 
     area.innerHTML = `
 
@@ -1298,9 +1341,7 @@ function showLogDetails(titleOrLog, type) {
 
                 <div class="content-title">
 
-                    <h3>
-                        ${title}
-                    </h3>
+                    <h3>${title}</h3>
 
                     <p>
                         ${logs.length} matching log(s)
@@ -1308,47 +1349,31 @@ function showLogDetails(titleOrLog, type) {
 
                 </div>
 
-
                 <button
                     class="refresh-btn"
                     onclick="closeDetails()">
-
-                    ✕ Close
-
+                    Close
                 </button>
 
             </div>
-
 
             <div class="table-wrapper">
 
                 <table>
 
                     <thead>
-
                         <tr>
-
                             <th>Timestamp</th>
-
                             <th>User</th>
-
                             <th>Event</th>
-
                             <th>Severity</th>
-
                             <th>AI Status</th>
-
                             <th>Risk</th>
-
                         </tr>
-
                     </thead>
 
-
                     <tbody>
-
                         ${rows}
-
                     </tbody>
 
                 </table>
@@ -1367,10 +1392,11 @@ function showLogDetails(titleOrLog, type) {
 
 function closeDetails() {
 
-    const area =
-        document.getElementById(
-            "detailsArea"
-        );
+    const area = document.getElementById(
+    currentView === "analytics"
+        ? "analyticsDetailsArea"
+        : "detailsArea"
+);
 
     if (area) {
         area.innerHTML = "";
@@ -1433,6 +1459,12 @@ document
         showSystemStatus
     );
 
+document
+    .getElementById("navWindowAI")
+    .addEventListener(
+        "click",
+        showWindowAI
+    );
 
 // IMPORTANT:
 // Refresh button now calls refreshDashboard()
@@ -1478,3 +1510,85 @@ setInterval(() => {
     loadLogs();
 
 }, 5000);
+// ==========================================
+// MINUTE-WINDOW AI MONITORING
+// ==========================================
+
+async function loadWindowPredictions() {
+
+    try {
+
+        const response = await fetch(
+            `${API_BASE}/window-predictions`
+        );
+
+        if (!response.ok) {
+            throw new Error("Failed to load window predictions");
+        }
+
+        const predictions = await response.json();
+
+        const total = predictions.length;
+
+        const normal = predictions.filter(
+            p => p.prediction === "NORMAL"
+        ).length;
+
+        const anomaly = predictions.filter(
+            p => p.prediction === "ANOMALY"
+        ).length;
+
+        document.getElementById("windowTotal").textContent = total;
+        document.getElementById("windowNormal").textContent = normal;
+        document.getElementById("windowAnomaly").textContent = anomaly;
+
+        const table = document.getElementById(
+            "windowPredictionTable"
+        );
+
+        if (total === 0) {
+
+            table.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align:center;padding:20px;">
+                        No predictions available yet.
+                    </td>
+                </tr>
+            `;
+
+            return;
+        }
+
+        table.innerHTML = predictions.map(p => {
+
+            const predictionClass =
+                p.prediction === "ANOMALY"
+                    ? "high"
+                    : "low";
+
+            return `
+                <tr>
+                    <td>${new Date(p.windowStart).toLocaleString()}</td>
+                    <td>${p.totalEvents}</td>
+                    <td>
+                        <span class="severity-badge ${predictionClass}">
+                            ${p.prediction}
+                        </span>
+                    </td>
+                    <td>${Number(p.anomalyScore).toFixed(5)}</td>
+                    <td>${p.model}</td>
+                </tr>
+            `;
+
+        }).join("");
+
+    } catch (error) {
+
+        console.error("Window AI monitoring error:", error);
+
+    }
+
+}
+loadWindowPredictions();
+
+setInterval(loadWindowPredictions, 30000);

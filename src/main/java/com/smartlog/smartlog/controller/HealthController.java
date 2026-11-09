@@ -1,12 +1,13 @@
+
 package com.smartlog.smartlog.controller;
 
 import jakarta.persistence.EntityManager;
 import org.springframework.web.bind.annotation.*;
 
-import javax.net.ssl.*;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URL;
-import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -40,23 +41,19 @@ public class HealthController {
 
         health.put(
                 "aiService",
-                checkService(
-                        aiUrl.replace("/analyze", "/health")
-                )
+                checkService(aiUrl.replace("/analyze", "/health"))
         );
 
         // Elasticsearch
         health.put(
                 "elasticsearch",
-                checkElasticsearch()
+                checkService("http://localhost:9200")
         );
 
-        // Logstash
+        // Logstash Beats input
         health.put(
                 "logstash",
-                checkService(
-                        "http://100.94.231.105:9600"
-                )
+                checkLogstash()
         );
 
         return health;
@@ -65,7 +62,6 @@ public class HealthController {
     private String checkMySQL() {
 
         try {
-
             entityManager
                     .createNativeQuery("SELECT 1")
                     .getSingleResult();
@@ -73,155 +69,52 @@ public class HealthController {
             return "ONLINE";
 
         } catch (Exception e) {
-
             return "OFFLINE";
         }
     }
 
     private String checkService(String serviceUrl) {
 
-        try {
+        HttpURLConnection connection = null;
 
+        try {
             URL url = new URL(serviceUrl);
 
-            HttpURLConnection connection =
-                    (HttpURLConnection) url.openConnection();
+            connection = (HttpURLConnection) url.openConnection();
 
             connection.setRequestMethod("GET");
-
             connection.setConnectTimeout(3000);
             connection.setReadTimeout(3000);
 
-            int responseCode =
-                    connection.getResponseCode();
+            int responseCode = connection.getResponseCode();
 
-            connection.disconnect();
-
-            if (responseCode >= 200 &&
-                    responseCode < 500) {
-
+            if (responseCode >= 200 && responseCode < 500) {
                 return "ONLINE";
             }
 
         } catch (Exception ignored) {
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
 
         return "OFFLINE";
     }
 
-    private String checkElasticsearch() {
+    private String checkLogstash() {
 
-        try {
+        try (Socket socket = new Socket()) {
 
-            // Accept Elasticsearch's self-signed certificate
-            TrustManager[] trustAllCertificates =
-                    new TrustManager[]{
-                            new X509TrustManager() {
-
-                                @Override
-                                public X509Certificate[]
-                                getAcceptedIssuers() {
-
-                                    return new X509Certificate[0];
-                                }
-
-                                @Override
-                                public void checkClientTrusted(
-                                        X509Certificate[] certs,
-                                        String authType) {
-                                }
-
-                                @Override
-                                public void checkServerTrusted(
-                                        X509Certificate[] certs,
-                                        String authType) {
-                                }
-                            }
-                    };
-
-            SSLContext sslContext =
-                    SSLContext.getInstance("TLS");
-
-            sslContext.init(
-                    null,
-                    trustAllCertificates,
-                    new java.security.SecureRandom()
+            socket.connect(
+                    new InetSocketAddress("localhost", 5044),
+                    3000
             );
 
-            URL url =
-                    new URL(
-                            "https://100.94.231.105:9200"
-                    );
+            return "ONLINE";
 
-            HttpsURLConnection connection =
-                    (HttpsURLConnection)
-                            url.openConnection();
-
-            connection.setSSLSocketFactory(
-                    sslContext.getSocketFactory()
-            );
-
-            connection.setHostnameVerifier(
-                    (hostname, session) -> true
-            );
-
-            connection.setRequestMethod("GET");
-
-            connection.setConnectTimeout(3000);
-            connection.setReadTimeout(3000);
-
-            // Elasticsearch authentication
-            String username = "elastic";
-
-            String password =
-                    System.getenv(
-                            "SMARTLOG_ES_PASSWORD"
-                    );
-
-            if (password == null ||
-                    password.isBlank()) {
-
-                connection.disconnect();
-
-                return "OFFLINE";
-            }
-
-            String credentials =
-                    username + ":" + password;
-
-            String encodedCredentials =
-                    java.util.Base64
-                            .getEncoder()
-                            .encodeToString(
-                                    credentials.getBytes(
-                                            java.nio.charset.StandardCharsets.UTF_8
-                                    )
-                            );
-
-            connection.setRequestProperty(
-                    "Authorization",
-                    "Basic " + encodedCredentials
-            );
-
-            connection.setRequestProperty(
-                    "Accept",
-                    "application/json"
-            );
-
-            int responseCode =
-                    connection.getResponseCode();
-
-            connection.disconnect();
-
-            if (responseCode >= 200 &&
-                    responseCode < 500) {
-
-                return "ONLINE";
-            }
-
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            return "OFFLINE";
         }
-
-        return "OFFLINE";
     }
 }

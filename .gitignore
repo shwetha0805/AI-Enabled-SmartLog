@@ -39,3 +39,29 @@ build/
 application-local.properties
 application-secret.properties
 !.env.example
+# Python virtual environments and cache
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local backups
+backups/
+*.backup
+*.backup.*
+*_backup.py
+
+# Local logs
+*.log
+
+# All backup variants
+*.backup*
+
+# Local AI training and evaluation data
+ai-service/data/
+ai-service/model_predictions_1000.csv
+
+# Generated Java benchmark artifacts
+*.class
+benchmark/classpath.txt

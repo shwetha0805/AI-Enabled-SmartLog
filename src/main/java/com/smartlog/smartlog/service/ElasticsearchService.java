@@ -463,6 +463,7 @@ public class ElasticsearchService {
         // AI ANALYSIS
         // =================================================
 
+
         try {
 
             Map<String, Object> aiResult =
@@ -474,7 +475,15 @@ public class ElasticsearchService {
             String risk =
                     (String) aiResult.get("risk");
 
-            if (Boolean.TRUE.equals(anomaly)) {
+            String serviceStatus =
+                    (String) aiResult.get("aiStatus");
+
+            // Preserve FALLBACK so this log can be retried later.
+            if ("FALLBACK".equals(serviceStatus)) {
+
+                log.setAiStatus("FALLBACK");
+
+            } else if (Boolean.TRUE.equals(anomaly)) {
 
                 log.setAiStatus("ANOMALY");
 
@@ -489,9 +498,8 @@ public class ElasticsearchService {
                             : risk
             );
 
-
             System.out.println(
-                    "REAL AI | "
+                    "AI RESULT | "
                             + log.getAiStatus()
                             + " | Risk: "
                             + log.getLabel()
@@ -500,13 +508,13 @@ public class ElasticsearchService {
         } catch (Exception e) {
 
             System.out.println(
-                    "⚠️ AI unavailable. "
-                            + "Using fallback analysis."
+                    "AI unavailable. Using fallback analysis: "
+                            + e.getMessage()
             );
 
-            log =
-                    fallbackAIService.analyze(log);
+            log = fallbackAIService.analyze(log);
         }
+
 
 
         // =================================================

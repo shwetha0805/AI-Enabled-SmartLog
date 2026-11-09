@@ -8,17 +8,14 @@ import com.smartlog.smartlog.repository.LogRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
+
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+
 import java.util.Map;
 
 @Service
@@ -32,12 +29,8 @@ public class ElasticsearchLogProcessorService {
             new ObjectMapper();
 
     private final String ES_URL =
-            "https://100.94.231.105:9200/smartlog-windows/_search";
+            "http://localhost:9200/smartlog-windows/_search";
 
-    private final String USERNAME = "elastic";
-
-    private final String PASSWORD =
-            System.getenv("SMARTLOG_ES_PASSWORD");
 
     public ElasticsearchLogProcessorService(
             LogRepository logRepository,
@@ -115,6 +108,7 @@ public class ElasticsearchLogProcessorService {
                 /*
                  * Send event to AI.
                  */
+
                 try {
 
                     Map<String, Object> aiResult =
@@ -126,7 +120,25 @@ public class ElasticsearchLogProcessorService {
                     String risk =
                             (String) aiResult.get("risk");
 
-                    if (Boolean.TRUE.equals(anomaly)) {
+                    String serviceStatus =
+                            (String) aiResult.get("aiStatus");
+
+                    // Save additional AI analysis details
+                    Object score = aiResult.get("anomalyScore");
+
+                    if (score instanceof Number) {
+                        log.setAnomalyScore(((Number) score).doubleValue());
+                    }
+
+                    log.setAiReason((String) aiResult.get("reason"));
+                    log.setAiModel((String) aiResult.get("model"));
+
+                    // Keep the log eligible for retry if Python AI is unavailable.
+                    if ("FALLBACK".equals(serviceStatus)) {
+
+                        log.setAiStatus("FALLBACK");
+
+                    } else if (Boolean.TRUE.equals(anomaly)) {
 
                         log.setAiStatus("ANOMALY");
 
@@ -135,8 +147,7 @@ public class ElasticsearchLogProcessorService {
                         log.setAiStatus("NORMAL");
                     }
 
-                    if (risk != null &&
-                            !risk.isBlank()) {
+                    if (risk != null && !risk.isBlank()) {
 
                         log.setLabel(risk);
 
@@ -146,9 +157,9 @@ public class ElasticsearchLogProcessorService {
                     }
 
                     System.out.println(
-                            "🤖 REAL AI | Event: "
+                            "AI RESULT | Event: "
                                     + log.getEventCode()
-                                    + " | "
+                                    + " | Status: "
                                     + log.getAiStatus()
                                     + " | Risk: "
                                     + log.getLabel()
@@ -156,17 +167,14 @@ public class ElasticsearchLogProcessorService {
 
                 } catch (Exception aiError) {
 
-                    /*
-                     * AI unavailable → fallback.
-                     */
                     System.out.println(
-                            "⚠️ AI unavailable. "
-                                    + "Using fallback."
+                            "AI unavailable. Using fallback: "
+                                    + aiError.getMessage()
                     );
 
-                    log =
-                            fallbackAIService.analyze(log);
+                    log = fallbackAIService.analyze(log);
                 }
+
 
                 /*
                  * Save processed event to MySQL.
@@ -566,77 +574,15 @@ public class ElasticsearchLogProcessorService {
      *
      * Events are returned oldest → newest.
      */
-    private String getRecentLogs()
-            throws Exception {
+    private String getRecentLogs() throws Exception {
 
-        TrustManager[] trustAllCertificates =
-                new TrustManager[]{
-                        new X509TrustManager() {
+        URL url = new URL(ES_URL);
 
-                            @Override
-                            public java.security.cert.X509Certificate[]
-                            getAcceptedIssuers() {
-
-                                return new java.security.cert.X509Certificate[0];
-                            }
-
-                            @Override
-                            public void checkClientTrusted(
-                                    java.security.cert.X509Certificate[] certs,
-                                    String authType) {
-                            }
-
-                            @Override
-                            public void checkServerTrusted(
-                                    java.security.cert.X509Certificate[] certs,
-                                    String authType) {
-                            }
-                        }
-                };
-
-        SSLContext sslContext =
-                SSLContext.getInstance("TLS");
-
-        sslContext.init(
-                null,
-                trustAllCertificates,
-                new java.security.SecureRandom()
-        );
-
-        HttpsURLConnection.setDefaultSSLSocketFactory(
-                sslContext.getSocketFactory()
-        );
-
-        HttpsURLConnection.setDefaultHostnameVerifier(
-                (hostname, session) -> true
-        );
-
-        URL url =
-                new URL(ES_URL);
-
-        HttpsURLConnection connection =
-                (HttpsURLConnection)
-                        url.openConnection();
+        java.net.HttpURLConnection connection =
+                (java.net.HttpURLConnection) url.openConnection();
 
         connection.setRequestMethod("POST");
-
         connection.setDoOutput(true);
-
-        String credentials =
-                USERNAME + ":" + PASSWORD;
-
-        String encodedCredentials =
-                Base64.getEncoder()
-                        .encodeToString(
-                                credentials.getBytes(
-                                        StandardCharsets.UTF_8
-                                )
-                        );
-
-        connection.setRequestProperty(
-                "Authorization",
-                "Basic " + encodedCredentials
-        );
 
         connection.setRequestProperty(
                 "Content-Type",
@@ -651,88 +597,60 @@ public class ElasticsearchLogProcessorService {
         connection.setConnectTimeout(10000);
         connection.setReadTimeout(15000);
 
-        /*
-         * Elasticsearch query:
-         *
-         * Last 2 minutes
-         * Maximum 100 events
-         * Oldest first
-         */
-        String requestBody =
-                """
+        String requestBody = """
+            {
+              "size": 100,
+              "sort": [
                 {
-                  "size": 100,
-                  "sort": [
-                    {
-                      "@timestamp": "asc"
-                    }
-                  ],
-                  "query": {
-                    "range": {
-                      "@timestamp": {
-                        "gte": "now-2m"
-                      }
-                    }
+                  "@timestamp": "asc"
+                }
+              ],
+              "query": {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-2m"
                   }
                 }
-                """;
+              }
+            }
+            """;
 
-        try (OutputStream outputStream =
-                     connection.getOutputStream()) {
-
+        try (OutputStream outputStream = connection.getOutputStream()) {
             outputStream.write(
-                    requestBody.getBytes(
-                            StandardCharsets.UTF_8
-                    )
+                    requestBody.getBytes(StandardCharsets.UTF_8)
             );
         }
 
-        int responseCode =
-                connection.getResponseCode();
+        int responseCode = connection.getResponseCode();
 
-        BufferedReader reader;
+        java.io.InputStream responseStream;
 
-        if (responseCode >= 200 &&
-                responseCode < 300) {
-
-            reader =
-                    new BufferedReader(
-                            new InputStreamReader(
-                                    connection.getInputStream(),
-                                    StandardCharsets.UTF_8
-                            )
-                    );
-
+        if (responseCode >= 200 && responseCode < 300) {
+            responseStream = connection.getInputStream();
         } else {
-
-            reader =
-                    new BufferedReader(
-                            new InputStreamReader(
-                                    connection.getErrorStream(),
-                                    StandardCharsets.UTF_8
-                            )
-                    );
+            responseStream = connection.getErrorStream();
         }
 
-        StringBuilder response =
-                new StringBuilder();
+        StringBuilder response = new StringBuilder();
 
-        String line;
+        if (responseStream != null) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(
+                            responseStream,
+                            StandardCharsets.UTF_8
+                    ))) {
 
-        while ((line =
-                reader.readLine()) != null) {
+                String line;
 
-            response
-                    .append(line)
-                    .append("\n");
+                while ((line = reader.readLine()) != null) {
+                    response.append(line).append("\n");
+                }
+            }
         }
-
-        reader.close();
 
         connection.disconnect();
 
         if (responseCode != 200) {
-
             throw new RuntimeException(
                     "Elasticsearch returned HTTP "
                             + responseCode

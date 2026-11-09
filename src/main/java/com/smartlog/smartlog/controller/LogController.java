@@ -37,43 +37,43 @@ public class LogController {
     }
 
     // CREATE LOG + AI ANALYSIS
+
+
     @PostMapping
-    public Log createLog(@Valid @RequestBody Log log) {
+public Log createLog(@Valid @RequestBody Log log) {
 
-        try {
+    Map<String, Object> aiResult =
+            aiService.sendLogToAI(log);
 
-            Map<String, Object> aiResult =
-                    aiService.sendLogToAI(log);
+    Boolean anomaly = (Boolean) aiResult.get("anomaly");
+    String risk = (String) aiResult.get("risk");
+    String aiStatus = (String) aiResult.get("aiStatus");
 
-            Boolean anomaly =
-                    (Boolean) aiResult.get("anomaly");
+    // Save AI prediction details
+    log.setAiModel((String) aiResult.get("model"));
+    log.setAiReason((String) aiResult.get("reason"));
 
-            String risk =
-                    (String) aiResult.get("risk");
+    Object score = aiResult.get("anomalyScore");
 
-            if (Boolean.TRUE.equals(anomaly)) {
-                log.setAiStatus("ANOMALY");
-            } else {
-                log.setAiStatus("NORMAL");
-            }
-
-            log.setLabel(risk);
-
-        } catch (Exception e) {
-
-            System.out.println(
-                    "⚠️ AI SERVICE UNAVAILABLE"
-            );
-
-            System.out.println(
-                    "➡️ Using fallback analysis for log."
-            );
-
-            log = fallbackAIService.analyze(log);
-        }
-
-        return logRepository.save(log);
+    if (score instanceof Number) {
+        log.setAnomalyScore(((Number) score).doubleValue());
     }
+
+    if (risk != null) {
+        log.setLabel(risk);
+    }
+
+    if ("FALLBACK".equals(aiStatus)) {
+        log.setAiStatus("FALLBACK");
+    } else if (Boolean.TRUE.equals(anomaly)) {
+        log.setAiStatus("ANOMALY");
+    } else {
+        log.setAiStatus("NORMAL");
+    }
+
+    return logRepository.save(log);
+}
+
 
     // GET ALL LOGS
     @GetMapping
@@ -151,6 +151,7 @@ public class LogController {
     }
 
     // RETRY AI ANALYSIS FOR FALLBACK LOG
+
     @PostMapping("/{id}/retry-ai")
     public Log retryAI(@PathVariable Long id) {
 
@@ -160,6 +161,22 @@ public class LogController {
 
                 Map<String, Object> aiResult =
                         aiService.sendLogToAI(log);
+
+                String serviceStatus =
+                        (String) aiResult.get("aiStatus");
+
+                // Keep the existing status if Python AI is unavailable.
+                if ("FALLBACK".equals(serviceStatus)) {
+
+                    log.setAiStatus("FALLBACK");
+
+                    System.out.println(
+                            "AI still unavailable. Log ID "
+                                    + id + " remains FALLBACK."
+                    );
+
+                    return logRepository.save(log);
+                }
 
                 Boolean anomaly =
                         (Boolean) aiResult.get("anomaly");
@@ -173,21 +190,26 @@ public class LogController {
                     log.setAiStatus("NORMAL");
                 }
 
-                log.setLabel(risk);
+                if (risk != null && !risk.isBlank()) {
+                    log.setLabel(risk);
+                }
 
                 return logRepository.save(log);
 
             } catch (Exception e) {
 
                 System.out.println(
-                        "⚠️ AI still unavailable. Log remains FALLBACK."
+                        "AI retry failed for log ID "
+                                + id + ": " + e.getMessage()
                 );
 
+                // Do not change the saved log on an exception.
                 return log;
             }
 
         }).orElse(null);
     }
+
 
     // DELETE LOG
     @DeleteMapping("/{id}")

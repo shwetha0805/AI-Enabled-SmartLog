@@ -36,6 +36,19 @@ public class Log {
 
     private String eventCode;
 
+    private String outcome;
+
+    private String channel;
+
+    private String logonType;
+    // AI analysis details
+    private Double anomalyScore;
+
+    @Column(columnDefinition = "TEXT")
+    private String aiReason;
+
+    private String aiModel;
+
     // Elasticsearch document ID
     @Column(unique = true)
     private String elasticsearchId;
@@ -128,5 +141,53 @@ public class Log {
 
     public void setElasticsearchId(String elasticsearchId) {
         this.elasticsearchId = elasticsearchId;
+    }
+
+    public Double getAnomalyScore() {
+        return anomalyScore;
+    }
+
+    public void setAnomalyScore(Double anomalyScore) {
+        this.anomalyScore = anomalyScore;
+    }
+
+    public String getAiReason() {
+        return aiReason;
+    }
+
+    public void setAiReason(String aiReason) {
+        this.aiReason = aiReason;
+    }
+
+    public String getAiModel() {
+        return aiModel;
+    }
+
+    public void setAiModel(String aiModel) {
+        this.aiModel = aiModel;
+    }
+
+    public String getOutcome() {
+        return outcome;
+    }
+
+    public void setOutcome(String outcome) {
+        this.outcome = outcome;
+    }
+
+    public String getChannel() {
+        return channel;
+    }
+
+    public void setChannel(String channel) {
+        this.channel = channel;
+    }
+
+    public String getLogonType() {
+        return logonType;
+    }
+
+    public void setLogonType(String logonType) {
+        this.logonType = logonType;
     }
 }
