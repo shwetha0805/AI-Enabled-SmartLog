@@ -22,7 +22,23 @@ let allLogs = [];
 let currentView = "dashboard";
 
 let activeAlerts = [];
-let acknowledgedAlerts = [];
+const ACKNOWLEDGED_ALERTS_KEY = "smartlog_acknowledged_alert_ids";
+
+let acknowledgedAlerts = (() => {
+    try {
+        const savedIds = JSON.parse(
+            localStorage.getItem(ACKNOWLEDGED_ALERTS_KEY) || "[]"
+        );
+
+        return Array.isArray(savedIds)
+            ? savedIds.map(id => String(id))
+            : [];
+
+    } catch (error) {
+        console.warn("Could not load acknowledged alerts:", error);
+        return [];
+    }
+})();
 let dismissedAlertIds = [];
 
 // =====================================================
@@ -204,7 +220,7 @@ function checkCriticalAlerts(alerts) {
     });
 
     const latestAlert = importantAlerts.find(log =>
-        !acknowledgedAlerts.includes(log.id) &&
+        !acknowledgedAlerts.includes(String(log.id)) &&
         !dismissedAlertIds.includes(log.id)
     );
 
@@ -318,10 +334,23 @@ function dismissCriticalAlert(id) {
 
 function acknowledgeAlert(id) {
 
-    if (!acknowledgedAlerts.includes(id)) {
+    const alertId = String(id);
 
-        acknowledgedAlerts.push(id);
+    if (!acknowledgedAlerts.includes(alertId)) {
 
+        acknowledgedAlerts.push(alertId);
+
+        try {
+            localStorage.setItem(
+                ACKNOWLEDGED_ALERTS_KEY,
+                JSON.stringify(acknowledgedAlerts)
+            );
+        } catch (error) {
+            console.error(
+                "Could not save acknowledged alert:",
+                error
+            );
+        }
     }
 
     const popup =
